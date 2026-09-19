@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lunar Lander GA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <h1>🚀 Lunar Lander GA</h1>
+    <p>La nave aprende a aterrizar sola mediante un algoritmo genético</p>
+  </header>
+
+  <main class="layout">
+
+    <section class="panel simulation-panel">
+      <canvas id="simCanvas" width="480" height="520"></canvas>
+      <div class="hud">
+        <div class="hud-item"><span class="label">Altura</span><span id="hudAlt">—</span></div>
+        <div class="hud-item"><span class="label">Velocidad</span><span id="hudVel">—</span></div>
+        <div class="hud-item"><span class="label">Combustible</span><span id="hudFuel">—</span></div>
+        <div class="hud-item"><span class="label">Estado</span><span id="hudStatus">—</span></div>
+      </div>
+    </section>
+
+    <section class="panel controls-panel">
+      <h2>Controles del algoritmo genético</h2>
+
+      <div class="control">
+        <label>Tamaño de población <span class="val" id="valPop">80</span></label>
+        <input type="range" id="popSize" min="20" max="200" step="10" value="80">
+      </div>
+
+      <div class="control">
+        <label>Probabilidad de cruce <span class="val" id="valCross">0.85</span></label>
+        <input type="range" id="crossRate" min="0" max="1" step="0.05" value="0.85">
+      </div>
+
+      <div class="control">
+        <label>Probabilidad de mutación <span class="val" id="valMut">0.15</span></label>
+        <input type="range" id="mutRate" min="0" max="1" step="0.05" value="0.15">
+      </div>
+
+      <div class="control">
+        <label>Número de generaciones <span class="val" id="valGen">60</span></label>
+        <input type="range" id="numGen" min="10" max="300" step="10" value="60">
+      </div>
+
+      <div class="control switch-row">
+        <label class="switch">
+          <input type="checkbox" id="animateToggle" checked>
+          <span class="slider-switch"></span>
+        </label>
+        <span>Animar cada generación</span>
+      </div>
+
+      <div class="buttons">
+        <button id="startBtn" class="btn primary">Iniciar evolución</button>
+        <button id="stopBtn" class="btn" disabled>Detener</button>
+        <button id="replayBtn" class="btn" disabled>Ver mejor individuo</button>
+        <button id="resetBtn" class="btn ghost">Reiniciar</button>
+      </div>
+    </section>
+
+    <section class="panel stats-panel">
+      <h2>Estadísticas de evolución</h2>
+      <div class="stats-row">
+        <div class="stat"><span class="stat-value" id="statGen">0</span><span class="stat-label">Generación</span></div>
+        <div class="stat"><span class="stat-value" id="statBest">0.00</span><span class="stat-label">Mejor fitness</span></div>
+        <div class="stat"><span class="stat-value" id="statAvg">0.00</span><span class="stat-label">Fitness promedio</span></div>
+        <div class="stat"><span class="stat-value" id="statImpact">—</span><span class="stat-label">Vel. impacto (mejor)</span></div>
+      </div>
+      <canvas id="chartCanvas" width="600" height="180"></canvas>
+      <div class="legend">
+        <span><i class="dot best"></i> Mejor fitness</span>
+        <span><i class="dot avg"></i> Fitness promedio</span>
+      </div>
+    </section>
+
+  </main>
+
+  <section class="panel info-panel">
+    <h2>Cómo funciona y cómo experimentar</h2>
+
+    <details class="accordion" open>
+      <summary>Física del descenso</summary>
+      <p>La nave tiene altura (<code>y</code>) y velocidad vertical (<code>vy</code>). En cada paso de tiempo,
+      la gravedad lunar resta velocidad y el motor —si está encendido— suma velocidad hacia arriba, proporcional
+      a la potencia del gen activo. El combustible es limitado: si se agota, el motor se apaga y la nave cae
+      en caída libre hasta tocar el suelo (por eso siempre "aterriza", nunca se queda flotando para siempre).</p>
+    </details>
+
+    <details class="accordion">
+      <summary>ADN de la nave (representación real)</summary>
+      <p>Cada nave es un arreglo de 18 números reales entre 0 y 1: son <strong>puntos de control</strong> de
+      potencia repartidos en el tiempo de vuelo. Entre un punto y el siguiente, la potencia se interpola
+      linealmente, dando una curva de empuje suave en vez de 150+ genes independientes (probamos eso primero
+      y el algoritmo tardaba demasiadas generaciones en converger — ver sección de abajo).</p>
+    </details>
+
+    <details class="accordion">
+      <summary>Función de fitness (qué premia y qué castiga)</summary>
+      <p>Al terminar el vuelo se mide la velocidad de impacto. Fitness alto = velocidad de impacto baja
+      (aterrizaje suave); fitness muy bajo = choque a alta velocidad. Si aterriza por debajo del umbral seguro
+      (2.5 m/s) recibe además un bono proporcional al combustible que le quedó, para premiar eficiencia,
+      no solo supervivencia.</p>
+    </details>
+
+    <details class="accordion">
+      <summary>Selección, cruce y mutación</summary>
+      <p><strong>Selección por ruleta:</strong> cada nave tiene una probabilidad de reproducirse proporcional
+      a su fitness / fitness total del grupo — las que aterrizan mejor tienen más chance de pasar sus genes.<br>
+      <strong>Cruce aritmético:</strong> el hijo mezcla los genes de dos padres (promedio ponderado al azar,
+      gen por gen).<br>
+      <strong>Mutación:</strong> cada gen tiene una probabilidad de recibir un empujón aleatorio, para no
+      quedarse atascados siempre con las mismas combinaciones (exploración).<br>
+      <strong>Elitismo:</strong> las mejores naves de cada generación pasan intactas a la siguiente, así el
+      progreso nunca retrocede.</p>
+    </details>
+
+    <details class="accordion">
+      <summary>Qué pasa si cambias cada control (para ver disparidades)</summary>
+      <table class="param-table">
+        <thead><tr><th>Control</th><th>Subirlo</th><th>Bajarlo</th></tr></thead>
+        <tbody>
+          <tr><td>Tamaño de población</td><td>Más variedad de estrategias por generación → converge en menos generaciones, pero cada generación tarda más en calcularse/animarse.</td><td>Menos variedad → puede estancarse en soluciones mediocres o tardar muchas más generaciones.</td></tr>
+          <tr><td>Prob. de cruce</td><td>Los hijos se parecen más a mezclas de los mejores padres → aprovecha rápido lo que ya funciona.</td><td>Más hijos son copias casi directas de un solo padre → menos mezcla, evolución más lenta.</td></tr>
+          <tr><td>Prob. de mutación</td><td>Más exploración de estrategias nuevas, pero valores muy altos meten ruido y pueden arruinar buenas soluciones ya encontradas.</td><td>Menos ruido, pero la población puede quedar atrapada siempre con las mismas ideas (poca diversidad).</td></tr>
+          <tr><td>Nº de generaciones</td><td>Más tiempo para refinar y llegar a un aterrizaje casi perfecto.</td><td>Puede cortarse la evolución antes de que aprenda a aterrizar suave.</td></tr>
+        </tbody>
+      </table>
+      <p class="hint">Prueba un experimento simple: pon mutación en 0 y compara cuánto (o qué tan poco) mejora
+      en 60 generaciones contra el valor por defecto (0.15) — se nota la diferencia en el gráfico de fitness.</p>
+    </details>
+  </section>
+
+  <section class="panel info-panel">
+    <h2>Cómo lo construimos</h2>
+    <p>Proyecto 100% front-end (HTML + CSS + JavaScript plano, sin librerías ni backend), separado en 4 archivos
+    con una responsabilidad cada uno:</p>
+    <ul class="build-list">
+      <li><code>sim.js</code> — física del descenso, simulación de un ADN completo y dibujo en canvas.</li>
+      <li><code>genetic.js</code> — población, selección por ruleta, cruce aritmético, mutación y nueva generación.</li>
+      <li><code>main.js</code> — conecta la interfaz con el algoritmo: corre las generaciones, anima la mejor nave y actualiza las estadísticas.</li>
+      <li><code>style.css</code> — estética estilo iOS (glassmorphism, sliders, switches, modo claro/oscuro).</li>
+    </ul>
+    <p>La mecánica del algoritmo genético se basó en las notas de clase (representación real, selección por
+    ruleta proporcional al fitness, cruce y mutación con elitismo) para mantener el mismo vocabulario y proceso
+    vistos en los ejemplos de la función x² y el problema de la mochila.</p>
+    <p>Antes de dar el proyecto por terminado hicimos pruebas del algoritmo por consola (sin interfaz) y
+    encontramos y corregimos tres problemas reales:</p>
+    <ol class="build-list">
+      <li>La gravedad tenía el signo invertido y la nave subía en vez de caer.</li>
+      <li>La función de fitness premiaba quedarse flotando sin aterrizar nunca, por encima de intentar
+      un aterrizaje real (aunque fuera un choque).</li>
+      <li>Con 150-180 genes independientes (uno por instante de tiempo) el algoritmo tardaba cientos de
+      generaciones en mejorar. Se redujo a 18 "puntos de control" interpolados en el tiempo, y empezó a
+      converger a un aterrizaje suave en 30-70 generaciones.</li>
+    </ol>
+    <p>Por último, ajustamos la animación (curva de tiempo tipo "ease-out" y un aviso de choque/aterrizaje
+    en pantalla) porque la maniobra de frenado ocurre en el último instante del vuelo y, repartida en
+    partes iguales de tiempo, era casi imposible de ver a simple vista.</p>
+  </section>
+
+</div>
+
+<script src="genetic.js"></script>
+<script src="sim.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
