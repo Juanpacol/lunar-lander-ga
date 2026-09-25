@@ -36,13 +36,13 @@ function simulate(dna) {
   for (let t = 0; t < SIM.MAX_SIM_STEPS; t++) {
     let thrust = fuel > 0 ? thrustAt(dna, t) : 0;
 
-    fuel -= thrust * SIM.FUEL_RATE * SIM.DT;
-    if (fuel < 0) fuel = 0;
-
     // vy > 0 = subiendo, vy < 0 = cayendo. Gravedad resta, el motor suma.
     vy -= SIM.GRAVITY * SIM.DT;
     vy += thrust * SIM.THRUST_POWER * SIM.DT;
     y += vy * SIM.DT;
+
+    fuel -= thrust * SIM.FUEL_RATE * SIM.DT;
+    if (fuel < 0) fuel = 0;
 
     if (y <= 0) {
       y = 0;
@@ -182,7 +182,7 @@ function drawChart(ctx, w, h, bestHistory, avgHistory) {
   ctx.fillStyle = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)";
   ctx.fillRect(0, 0, w, h);
 
-  if (bestHistory.length < 2) return;
+  if (bestHistory.length < 1) return;
 
   const maxVal = Math.max(0.1, ...bestHistory, ...avgHistory);
   const pad = 10;
@@ -192,7 +192,9 @@ function drawChart(ctx, w, h, bestHistory, avgHistory) {
     ctx.lineWidth = lineWidth;
     ctx.beginPath();
     series.forEach((v, i) => {
-      const x = pad + (i / (series.length - 1)) * (w - pad * 2);
+      const x = series.length === 1
+        ? w / 2
+        : pad + (i / (series.length - 1)) * (w - pad * 2);
       const y = h - pad - (v / maxVal) * (h - pad * 2);
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);

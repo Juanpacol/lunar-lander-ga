@@ -33,7 +33,8 @@ let bestFitnessHistory = [];
 let avgFitnessHistory = [];
 let bestOverall = null;
 let running = false;
-let cancelPlayback = null;
+let cancelPlayback = null;  // () => void — cancela el rAF
+let resolvePending = null;  // resolve() de la promesa en curso
 let stopRequested = false;
 
 function syncLabels() {
@@ -70,7 +71,10 @@ function drawChartNow() {
 }
 
 function playIndividual(individual, durationMs, onDone) {
+  // Cancela la animación anterior Y resuelve su promesa pendiente para no dejar el loop colgado
   if (cancelPlayback) cancelPlayback();
+  if (resolvePending) { resolvePending(); resolvePending = null; }
+
   cancelPlayback = playHistory(
     individual.result.history,
     durationMs,
@@ -82,6 +86,8 @@ function playIndividual(individual, durationMs, onDone) {
       setHud(frame, status);
     },
     () => {
+      cancelPlayback = null;
+      resolvePending = null;
       drawResultBanner(individual.result);
       if (onDone) onDone();
     }
@@ -155,7 +161,8 @@ async function runEvolution() {
     drawChartNow();
 
     if (animate) {
-      await new Promise((resolve) => playIndividual(best, 1500, resolve));
+      await new Promise((resolve) => { resolvePending = resolve; playIndividual(best, 1500, resolve); });
+      resolvePending = null;
       await new Promise((resolve) => setTimeout(resolve, 450)); // pausa para leer el resultado (choque/aterrizaje)
     } else {
       drawScene(ctx, els.canvas.width, els.canvas.height, best.result.history[best.result.history.length - 1]);
@@ -182,6 +189,8 @@ els.startBtn.addEventListener("click", () => {
 
 els.stopBtn.addEventListener("click", () => {
   stopRequested = true;
+  if (cancelPlayback) cancelPlayback();
+  if (resolvePending) { resolvePending(); resolvePending = null; }
 });
 
 els.replayBtn.addEventListener("click", () => {
@@ -190,6 +199,8 @@ els.replayBtn.addEventListener("click", () => {
 
 els.resetBtn.addEventListener("click", () => {
   if (cancelPlayback) cancelPlayback();
+  if (resolvePending) { resolvePending(); resolvePending = null; }
+  stopRequested = true;
   bestFitnessHistory = [];
   avgFitnessHistory = [];
   bestOverall = null;
