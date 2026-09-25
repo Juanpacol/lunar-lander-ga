@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lunar Lander GA</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <div class="app">
@@ -17,7 +17,10 @@
   <main class="layout">
 
     <section class="panel simulation-panel">
-      <canvas id="simCanvas" width="480" height="520"></canvas>
+      <div class="canvas-wrap">
+        <canvas id="simCanvas" width="480" height="520"></canvas>
+        <div id="predictToast" class="predict-toast"></div>
+      </div>
       <div class="hud">
         <div class="hud-item"><span class="label">Altura</span><span id="hudAlt">—</span></div>
         <div class="hud-item"><span class="label">Velocidad</span><span id="hudVel">—</span></div>
@@ -42,11 +45,13 @@
       <div class="control">
         <label>Probabilidad de mutación <span class="val" id="valMut">0.15</span></label>
         <input type="range" id="mutRate" min="0" max="1" step="0.05" value="0.15">
+        <p class="param-warning" id="mutWarning" hidden>⚠️ En 0 no explora: se estanca y casi siempre choca.</p>
       </div>
 
       <div class="control">
         <label>Número de generaciones <span class="val" id="valGen">60</span></label>
         <input type="range" id="numGen" min="10" max="300" step="10" value="60">
+        <p class="param-warning" id="genWarning" hidden>⚠️ Con menos de 30 casi nunca alcanza a aterrizar suave.</p>
       </div>
 
       <div class="control switch-row">
@@ -60,6 +65,7 @@
       <div class="buttons">
         <button id="startBtn" class="btn primary">Iniciar evolución</button>
         <button id="stopBtn" class="btn" disabled>Detener</button>
+        <button id="skipBtn" class="btn" disabled>Saltar al final</button>
         <button id="replayBtn" class="btn" disabled>Ver mejor individuo</button>
         <button id="resetBtn" class="btn ghost">Reiniciar</button>
       </div>
@@ -78,9 +84,33 @@
         <span><i class="dot best"></i> Mejor fitness</span>
         <span><i class="dot avg"></i> Fitness promedio</span>
       </div>
+      <button id="fullStatsBtn" class="btn ghost full-stats-btn" disabled>Ver estadística completa</button>
     </section>
 
   </main>
+
+  <div id="fullStatsModal" class="modal-overlay" hidden>
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2>Estadística completa por generación</h2>
+        <button id="closeStatsBtn" class="btn ghost modal-close" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>Gen</th>
+              <th>Mejor fitness</th>
+              <th>Fitness promedio</th>
+              <th>Vel. impacto</th>
+              <th>Resultado</th>
+            </tr>
+          </thead>
+          <tbody id="fullStatsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <section class="panel info-panel">
     <h2>Cómo funciona y cómo experimentar</h2>
@@ -167,8 +197,8 @@
 
 </div>
 
-<script src="genetic.js"></script>
-<script src="sim.js"></script>
-<script src="main.js"></script>
+<script src="genetic.js?v=8"></script>
+<script src="sim.js?v=8"></script>
+<script src="main.js?v=8"></script>
 </body>
 </html>

@@ -15,11 +15,19 @@ const els = {
   valCross: document.getElementById("valCross"),
   valMut: document.getElementById("valMut"),
   valGen: document.getElementById("valGen"),
+  mutWarning: document.getElementById("mutWarning"),
+  genWarning: document.getElementById("genWarning"),
   animateToggle: document.getElementById("animateToggle"),
   startBtn: document.getElementById("startBtn"),
   stopBtn: document.getElementById("stopBtn"),
+  skipBtn: document.getElementById("skipBtn"),
   replayBtn: document.getElementById("replayBtn"),
   resetBtn: document.getElementById("resetBtn"),
+  predictToast: document.getElementById("predictToast"),
+  fullStatsBtn: document.getElementById("fullStatsBtn"),
+  fullStatsModal: document.getElementById("fullStatsModal"),
+  fullStatsBody: document.getElementById("fullStatsBody"),
+  closeStatsBtn: document.getElementById("closeStatsBtn"),
   statGen: document.getElementById("statGen"),
   statBest: document.getElementById("statBest"),
   statAvg: document.getElementById("statAvg"),
@@ -31,16 +39,20 @@ const chartCtx = els.chart.getContext("2d");
 
 let bestFitnessHistory = [];
 let avgFitnessHistory = [];
+let generationLog = [];
 let bestOverall = null;
 let running = false;
 let cancelPlayback = null;
 let stopRequested = false;
+let skipRequested = false;
 
 function syncLabels() {
   els.valPop.textContent = els.popSize.value;
   els.valCross.textContent = Number(els.crossRate.value).toFixed(2);
   els.valMut.textContent = Number(els.mutRate.value).toFixed(2);
   els.valGen.textContent = els.numGen.value;
+  els.mutWarning.hidden = Number(els.mutRate.value) > 0;
+  els.genWarning.hidden = Number(els.numGen.value) >= 30;
 }
 [els.popSize, els.crossRate, els.mutRate, els.numGen].forEach((el) =>
   el.addEventListener("input", syncLabels)
@@ -63,6 +75,45 @@ function updateStats(gen, totalGen, best, avg) {
   els.statBest.textContent = best.fitness.toFixed(3);
   els.statAvg.textContent = avg.toFixed(3);
   els.statImpact.textContent = `${best.result.impactSpeed.toFixed(2)} m/s`;
+}
+
+function showPrediction(result) {
+  const el = els.predictToast;
+  const safe = !result.crashed;
+  el.textContent = safe
+    ? `✅ Va a aterrizar suave (${result.impactSpeed.toFixed(2)} m/s)`
+    : `💥 Va a chocar (${result.impactSpeed.toFixed(2)} m/s)`;
+  el.classList.remove("land", "crash");
+  el.classList.add(safe ? "land" : "crash", "show");
+}
+
+function hidePrediction() {
+  els.predictToast.classList.remove("show");
+}
+
+function renderFullStats() {
+  els.fullStatsBody.innerHTML = generationLog
+    .map((row) => {
+      const resultClass = row.crashed ? "result-crash" : "result-land";
+      const resultText = row.crashed ? "💥 Choque" : "✅ Aterrizaje suave";
+      return `<tr>
+        <td>${row.gen}</td>
+        <td>${row.best.toFixed(3)}</td>
+        <td>${row.avg.toFixed(3)}</td>
+        <td>${row.impact.toFixed(2)} m/s</td>
+        <td class="${resultClass}">${resultText}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function openFullStats() {
+  renderFullStats();
+  els.fullStatsModal.hidden = false;
+}
+
+function closeFullStats() {
+  els.fullStatsModal.hidden = true;
 }
 
 function drawChartNow() {
@@ -117,14 +168,18 @@ function setControlsEnabled(enabled) {
 async function runEvolution() {
   running = true;
   stopRequested = false;
+  skipRequested = false;
   bestFitnessHistory = [];
   avgFitnessHistory = [];
+  generationLog = [];
   bestOverall = null;
 
   els.startBtn.disabled = true;
   els.stopBtn.disabled = false;
+  els.skipBtn.disabled = false;
   els.replayBtn.disabled = true;
   els.resetBtn.disabled = true;
+  els.fullStatsBtn.disabled = true;
   setControlsEnabled(false);
 
   const popSize = Number(els.popSize.value);
@@ -151,12 +206,22 @@ async function runEvolution() {
 
     bestFitnessHistory.push(best.fitness);
     avgFitnessHistory.push(avgFitness);
+    generationLog.push({
+      gen,
+      best: best.fitness,
+      avg: avgFitness,
+      impact: best.result.impactSpeed,
+      crashed: best.result.crashed,
+    });
     updateStats(gen, totalGen, best, avgFitness);
     drawChartNow();
+    showPrediction(best.result);
+    els.fullStatsBtn.disabled = false;
+    if (!els.fullStatsModal.hidden) renderFullStats();
 
-    if (animate) {
-      await new Promise((resolve) => playIndividual(best, 1500, resolve));
-      await new Promise((resolve) => setTimeout(resolve, 450)); // pausa para leer el resultado (choque/aterrizaje)
+    if (animate && !skipRequested) {
+      await new Promise((resolve) => playIndividual(best, 800, resolve));
+      await new Promise((resolve) => setTimeout(resolve, 200)); // pausa para leer el resultado (choque/aterrizaje)
     } else {
       drawScene(ctx, els.canvas.width, els.canvas.height, best.result.history[best.result.history.length - 1]);
       drawResultBanner(best.result);
@@ -169,10 +234,13 @@ async function runEvolution() {
   }
 
   running = false;
+  skipRequested = false;
   els.startBtn.disabled = false;
   els.stopBtn.disabled = true;
+  els.skipBtn.disabled = true;
   els.replayBtn.disabled = !bestOverall;
   els.resetBtn.disabled = false;
+  els.fullStatsBtn.disabled = generationLog.length === 0;
   setControlsEnabled(true);
 }
 
@@ -184,16 +252,27 @@ els.stopBtn.addEventListener("click", () => {
   stopRequested = true;
 });
 
+els.skipBtn.addEventListener("click", () => {
+  if (cancelPlayback) cancelPlayback();
+  skipRequested = true;
+  els.skipBtn.disabled = true;
+});
+
 els.replayBtn.addEventListener("click", () => {
   if (bestOverall) playIndividual(bestOverall, 2200, null);
 });
 
 els.resetBtn.addEventListener("click", () => {
   if (cancelPlayback) cancelPlayback();
+  hidePrediction();
+  closeFullStats();
   bestFitnessHistory = [];
   avgFitnessHistory = [];
+  generationLog = [];
   bestOverall = null;
   els.replayBtn.disabled = true;
+  els.skipBtn.disabled = true;
+  els.fullStatsBtn.disabled = true;
   els.statGen.textContent = "0";
   els.statBest.textContent = "0.00";
   els.statAvg.textContent = "0.00";
@@ -201,6 +280,15 @@ els.resetBtn.addEventListener("click", () => {
   drawIdleScene();
   drawChartNow();
   setHud({ y: SIM.START_Y, vy: 0, fuel: SIM.FUEL_CAPACITY }, "—");
+});
+
+els.fullStatsBtn.addEventListener("click", openFullStats);
+els.closeStatsBtn.addEventListener("click", closeFullStats);
+els.fullStatsModal.addEventListener("click", (e) => {
+  if (e.target === els.fullStatsModal) closeFullStats();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !els.fullStatsModal.hidden) closeFullStats();
 });
 
 drawIdleScene();

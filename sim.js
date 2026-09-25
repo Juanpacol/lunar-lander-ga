@@ -156,6 +156,32 @@ function drawScene(ctx, w, h, frame) {
 function playHistory(history, durationMs, onFrame, onDone) {
   const start = performance.now();
   let rafId;
+  let done = false;
+
+  // Chrome pausa requestAnimationFrame por completo en pestañas ocultas: sin este
+  // atajo, cambiar de pestaña/app deja la animación (y con ella todo el bucle de
+  // generaciones, que espera su callback) congelada hasta volver a mirarla.
+  function finishNow() {
+    if (done) return;
+    done = true;
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    const lastIdx = history.length - 1;
+    onFrame(history[lastIdx], lastIdx, history.length);
+    if (onDone) onDone();
+  }
+
+  function onVisibilityChange() {
+    if (document.hidden) finishNow();
+  }
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
+  // Si la pestaña ya estaba oculta cuando arrancó esta generación, no hay evento
+  // "visibilitychange" que dispare (no hay cambio de estado) y requestAnimationFrame
+  // nunca llega a correr: sin este chequeo, la espera queda colgada para siempre.
+  if (document.hidden) {
+    setTimeout(finishNow, 0);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }
 
   function tick(now) {
     const elapsed = now - start;
@@ -166,13 +192,18 @@ function playHistory(history, durationMs, onFrame, onDone) {
 
     if (linear < 1) {
       rafId = requestAnimationFrame(tick);
-    } else if (onDone) {
-      onDone();
+    } else {
+      done = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (onDone) onDone();
     }
   }
 
   rafId = requestAnimationFrame(tick);
-  return () => cancelAnimationFrame(rafId);
+  return () => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    cancelAnimationFrame(rafId);
+  };
 }
 
 function drawChart(ctx, w, h, bestHistory, avgHistory) {
